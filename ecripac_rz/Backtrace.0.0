@@ -1,0 +1,49 @@
+Host Name: lpsc5009w
+=== If no file names and line numbers are shown below, one can run
+            addr2line -Cpfie my_exefile my_line_address
+    to convert `my_line_address` (e.g., 0x4a6b) into file name and line number.
+    Or one can use amrex/Tools/Backtrace/parse_bt.py.
+
+=== Please note that the line number reported by addr2line may not be accurate.
+    One can use
+            readelf -wl my_exefile | grep my_line_address'
+    to find out the offset for that line.
+
+ 0: /home/cernuschi/miniforge3/envs/warpx/bin/../lib/libamrex_2d.so(_ZN5amrex11BLBackTrace20print_backtrace_infoEP8_IO_FILE+0x42) [0x799ea2764522]
+
+ 1: /home/cernuschi/miniforge3/envs/warpx/bin/../lib/libamrex_2d.so(_ZN5amrex11BLBackTrace7handlerEi+0x443) [0x799ea2768be3]
+
+ 2: /home/cernuschi/miniforge3/envs/warpx/bin/../lib/libamrex_2d.so(_ZN5amrex10Error_hostEPKcS1_+0xc4) [0x799ea26c0e24]
+
+ 3: warpx.rz(+0x614322) [0x598bbf5f2322]
+
+ 4: warpx.rz(+0x6159b5) [0x598bbf5f39b5]
+
+ 5: warpx.rz(+0x62324f) [0x598bbf60124f]
+
+ 6: warpx.rz(+0x13f044) [0x598bbf11d044]
+
+ 7: warpx.rz(+0x14a322) [0x598bbf128322]
+
+ 8: warpx.rz(+0x12db8f) [0x598bbf10bb8f]
+
+ 9: warpx.rz(+0x1eeedc) [0x598bbf1ccedc]
+
+10: warpx.rz(+0xa05b6) [0x598bbf07e5b6]
+
+11: /usr/lib/x86_64-linux-gnu/libc.so.6(+0x2a1ca) [0x799e9ee2a1ca]
+
+12: /usr/lib/x86_64-linux-gnu/libc.so.6(__libc_start_main+0x8b) [0x799e9ee2a28b]
+
+13: warpx.rz(+0xa9bf2) [0x598bbf087bf2]
+
+
+===== TinyProfilers ======
+main()
+WarpX::InitData()
+WarpX::ComputeSpaceChargeField
+RelativisticExplicitES::ComputeSpaceChargeField
+RelativisticExplicitES::AddSpaceChargeField
+computePhi
+MLMG::solve()
+
