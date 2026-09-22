@@ -1,0 +1,133 @@
+# algo
+algo.load_balance_intervals = 10
+algo.maxwell_solver = "Yee"
+algo.particle_shape = 2
+
+# alphas
+alphas.charge = 3.204353268e-19
+alphas.density_function(x,y,z) = "(x**2 + y**2 <= 0.01**2)*1.1168635137579826e+16/2."
+alphas.initialize_self_fields = 0
+alphas.injection_style = "nuniformpercell"
+alphas.mass = 6.69509885302e-27
+alphas.momentum_distribution_type = "gaussian"
+alphas.num_particles_per_cell_each_dim = 2 2 2
+alphas.profile = "parse_density_function"
+alphas.ux_m = 0.0
+alphas.ux_th = 3.64872390146026e-05
+alphas.uy_m = 0.0
+alphas.uy_th = 3.64872390146026e-05
+alphas.uz_m = 0.0
+alphas.uz_th = 3.64872390146026e-05
+alphas.xmax = 0.01
+alphas.xmin = -0.01
+alphas.ymax = 0.01
+alphas.ymin = -0.01
+alphas.zmax = 0.005
+alphas.zmin = -0.005
+
+# amr
+amr.blocking_factor = 32
+amr.max_grid_size = 64
+amr.max_level = 0
+amr.n_cell = 512 512 192
+amr.restart = "./chkpoints/Python_restart_runtime_components_chk3200000"
+
+# boundary
+boundary.field_hi = absorbing_silver_mueller absorbing_silver_mueller absorbing_silver_mueller
+boundary.field_lo = absorbing_silver_mueller absorbing_silver_mueller absorbing_silver_mueller
+boundary.particle_hi = absorbing absorbing absorbing
+boundary.particle_lo = absorbing absorbing absorbing
+
+# chkpoint
+chkpoint.diag_type = "Full"
+chkpoint.file_prefix = "./chkpoints/Python_restart_runtime_components_chk"
+chkpoint.format = "checkpoint"
+chkpoint.intervals = 200000
+
+# diagnostics
+diagnostics.diags_names = particle_diag smallparticle_diag field_diag chkpoint
+
+# electrons
+electrons.charge = "-q_e"
+electrons.density_function(x,y,z) = "(x**2 + y**2 <= 0.01**2)*1.1168635137579826e+16"
+electrons.initialize_self_fields = 0
+electrons.injection_style = "nuniformpercell"
+electrons.mass = "m_e"
+electrons.momentum_distribution_type = "gaussian"
+electrons.num_particles_per_cell_each_dim = 2 2 2
+electrons.profile = "parse_density_function"
+electrons.ux_m = 0.0
+electrons.ux_th = 0.004423614243094195
+electrons.uy_m = 0.0
+electrons.uy_th = 0.004423614243094195
+electrons.uz_m = 0.0
+electrons.uz_th = 0.004423614243094195
+electrons.xmax = 0.01
+electrons.xmin = -0.01
+electrons.ymax = 0.01
+electrons.ymin = -0.01
+electrons.zmax = 0.005
+electrons.zmin = -0.005
+
+# field_diag
+field_diag.coarsening_ratio = 4 4 4
+field_diag.diag_type = "Full"
+field_diag.dump_last_timestep = 1
+field_diag.fields_to_plot = Bx By Bz Ex Ey Ez jx jy jz rho
+field_diag.format = "openpmd"
+field_diag.intervals = 8000
+field_diag.write_species = 0
+
+# geometry
+geometry.dims = "3"
+geometry.prob_hi = 0.05 0.05 0.02
+geometry.prob_lo = -0.05 -0.05 -0.02
+
+# max_step
+max_step = 3600000
+
+# particle_diag
+particle_diag.alphas.variables = ux uy uz w x y z
+particle_diag.diag_type = "Full"
+particle_diag.dump_last_timestep = 1
+particle_diag.electrons.variables = ux uy uz w x y z
+particle_diag.fields_to_plot = "none"
+particle_diag.format = "openpmd"
+particle_diag.intervals = 80000
+particle_diag.species = electrons alphas
+particle_diag.write_species = 1
+
+# particles
+particles.B_ext_particle_fields = ext_field1 ext_field2
+particles.B_ext_particle_init_style = "read_from_file"
+particles.E_ext_particle_fields = ext_field3
+particles.E_ext_particle_init_style = "read_from_file"
+particles.ext_field1.read_fields_B_dependency(t) = "1.0"
+particles.ext_field1.read_fields_from_path = "../res/ECRIPAC_staticfields_3d.h5"
+particles.ext_field2.read_fields_B_dependency(t) = "sin(1256637.0614359172*t + 1.5707963267948966)"
+particles.ext_field2.read_fields_from_path = "../res/ECRIPAC_pulsedfields_3d.h5"
+particles.ext_field3.read_fields_E_dependency(t) = "cos(1256637.0614359172*t + 1.5707963267948966)"
+particles.ext_field3.read_fields_from_path = "../res/ECRIPAC_pulsedfields_3d.h5"
+particles.species_names = electrons alphas
+
+# smallparticle_diag
+smallparticle_diag.alphas.random_fraction = 0.01
+smallparticle_diag.alphas.variables = ux uy uz w x y z
+smallparticle_diag.diag_type = "Full"
+smallparticle_diag.dump_last_timestep = 1
+smallparticle_diag.electrons.random_fraction = 0.01
+smallparticle_diag.electrons.variables = ux uy uz w x y z
+smallparticle_diag.fields_to_plot = "none"
+smallparticle_diag.format = "openpmd"
+smallparticle_diag.intervals = 8000
+smallparticle_diag.species = electrons alphas
+smallparticle_diag.write_species = 1
+
+# warpx
+warpx.cfl = 0.95
+warpx.do_moving_window = 1
+warpx.moving_window_dir = "z"
+warpx.moving_window_v = 0.0010006922855944561
+warpx.start_moving_window_step = 3358345
+warpx.verbose = 1
+warpx.limit_verbose_step = true

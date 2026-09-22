@@ -1,0 +1,14 @@
+name: ecripac-warpx
+channels:
+  - conda-forge
+dependencies:
+  - python
+  - numpy
+  - scipy
+  - matplotlib
+  - numba
+  - h5py
+  - openpmd-api
+  - pip
+  - pip:
+      - openpmd-viewer

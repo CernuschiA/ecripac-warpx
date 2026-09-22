@@ -1,0 +1,17 @@
+cff-version: 1.2.0
+title: "ECRIPAC WarpX simulations"
+message: "If you use this software, please cite it as below."
+type: software
+authors:
+  - family-names: Cernuschi
+    given-names: Andrea
+    affiliation: "Université Grenoble Alpes / LPSC, France"
+    orcid: "https://orcid.org/0009-0002-4951-8364"
+version: "0.1.0"
+date-released: "2026-09-22"
+repository-code: "https://github.com/CernuschiA/ecripac-warpx"
+license: MIT
+url: "https://github.com/CernuschiA/ecripac-warpx"
+abstract: >
+  Particle-in-cell simulations of the ECRIPAC accelerator concept using WarpX,
+  including three-dimensional and cylindrical simulation configurations.

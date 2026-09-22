@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# WarpX simulation outputs
+diags/
+chkpoints/
+outputs/
+*.h5
+*.bp
+*.json
+
+# Generated plots and videos
+*.png
+*.jpg
+*.mp4
+
+# HPC output
+*.o
+*.e
+*.out
+
+# Large field maps; conversion utilities and Python field definitions remain
+# tracked.
+/res/*.h5
+/res/*.bp
+
+# Local files
+.DS_Store

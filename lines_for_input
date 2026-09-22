@@ -1,0 +1,3 @@
+particles.B_ext_particle_init_style = "read_from_file"
+warpx.limit_verbose_step = true
+amr.restart = "./chkpoints/Python_restart_runtime_components_chk"
