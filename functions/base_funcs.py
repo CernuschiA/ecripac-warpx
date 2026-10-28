@@ -14,6 +14,7 @@ import matplotlib.animation as matani
 import matplotlib.pyplot as plt
 import matplotlib.widgets as plt_w
 from matplotlib import colors, colormaps
+from matplotlib.ticker import ScalarFormatter
 from numba import njit
 
 ############################################################
@@ -298,28 +299,37 @@ def gyrofrequency(pop, ts):
     gamma_avg = pop.plasma_average(ts, pop.evaluate_temperature, args=[False])
     return np.abs(pop.charge*B_avg/pop.mass/gamma_avg)
 
-def omega_lefthand(electrons, ts):
+def omega_lefthand(electrons, ts, Omega_e=None, omega_p=None):
     ''' Evaluate the average cut-off frequency omega lefthand for the plasma at a given timestep '''
-    Omega_e = gyrofrequency(electrons, ts)
-    omega_p = plasma_frequency(electrons, ts)
+    if Omega_e is None:
+        Omega_e = gyrofrequency(electrons, ts)
+    if omega_p is None:
+        omega_p = plasma_frequency(electrons, ts)
     return 0.5*(np.sqrt(Omega_e**2 + 4*omega_p**2) - Omega_e)
 
-def omega_righthand(electrons, ts):
+def omega_righthand(electrons, ts, Omega_e=None, omega_p=None):
     ''' Evaluate the average cut-off frequency omega righthand for the plasma at a given timestep '''
-    Omega_e = gyrofrequency(electrons, ts)
-    omega_p = plasma_frequency(electrons, ts)
+    if Omega_e is None:
+        Omega_e = gyrofrequency(electrons, ts)
+    if omega_p is None:
+        omega_p = plasma_frequency(electrons, ts)
     return 0.5*(np.sqrt(Omega_e**2 + 4*omega_p**2) + Omega_e)
 
-def omega_upper_hybrid(electrons, ts):
+def omega_upper_hybrid(electrons, ts, Omega_e=None, omega_p=None):
     ''' Evaluate the average upper hybrid frequency for the plasma at a given timestep '''
-    Omega_e = gyrofrequency(electrons, ts)
-    omega_p = plasma_frequency(electrons, ts)
+    if Omega_e is None:
+        Omega_e = gyrofrequency(electrons, ts)
+    if omega_p is None:
+        omega_p = plasma_frequency(electrons, ts)
     return np.sqrt(Omega_e**2 + omega_p**2)
 
-def omega_lower_hybrid(electrons, ions, ts):
-    Omega_i = gyrofrequency(ions, ts)
-    Omega_e = gyrofrequency(electrons, ts)
-    omega_p = plasma_frequency(electrons, ts)
+def omega_lower_hybrid(electrons, ions, ts, Omega_i=None, Omega_e=None, omega_p=None):
+    if Omega_i is None:
+        Omega_i = gyrofrequency(ions, ts)
+    if Omega_e is None:
+        Omega_e = gyrofrequency(electrons, ts)
+    if omega_p is None:
+        omega_p = plasma_frequency(electrons, ts)
     return np.sqrt(Omega_i*Omega_e/(1 + Omega_e**2/omega_p**2))
 
 def alfven_velocity(ions, ts):
@@ -340,6 +350,18 @@ def bohm_gross_dr(electrons, ts, k):
 ''' ------------------ '''
 ''' Plotting functions '''
 ''' ------------------ '''
+
+def make_sci_formatter():
+    fmt = ScalarFormatter(useMathText=True)  # gives "×10^x" instead of "1e5"
+    fmt.set_scientific(True)
+    fmt.set_powerlimits((0, 0))              # always use scientific notation, whatever the magnitude
+    return fmt
+
+def format_cbars(cbars):
+    ''' Apply scientific formatting to a list of colorbars '''
+    for cbar in cbars:
+        cbar.formatter = make_sci_formatter()
+        cbar.update_ticks()
 
 def plot2D(x, y, xlab, ylab, xlim=None, ylim=None, xlog=False, ylog=False, col=None, clabel=None, vx=None, vy=None, ax=None, alpha=1., plot_type="plot", savepath=None):
     ''' Generic function to create 2D plots of various types '''
@@ -500,13 +522,13 @@ def update_cartesian2Dplot_slider(plotx, ploty, plotz, xdata, ydata, zdata, xax,
     update_2Dplot_slider(ploty, ydata, yax, lim)
     update_2Dplot_slider(plotz, zdata, zax, lim)
 
-def update_histogram_slider(val, ax, func, bins, xlab, ylab, xlim, timesteps, time):
+def update_histogram_slider(val, ax, func, bins, xlab, ylab, xlim, ylim, timesteps, time):
     ''' Generic function to update histogram plots with a slider '''
     ## Update histogram
     ax.cla()
     ind = list(timesteps).index(val)
     data = func(ind)
-    histplot(data, bins, xlab, ylab, xlim=xlim, ax=ax, suptitle=f"t = {time[ind]:.2e} s")
+    histplot(data, bins, xlab, ylab, xlim=xlim, ylim=ylim, ax=ax, suptitle=f"t = {time[ind]:.2e} s")
     plt.draw()
     ## Print information on timestep
     print(f"Maximum {xlab} at timestep {timesteps[ind]}: {np.max(data):.2e}")

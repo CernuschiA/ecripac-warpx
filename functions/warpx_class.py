@@ -13,7 +13,7 @@ class warpx_namelist:
     ''' ------------------------ '''
     ''' Initialization functions '''
     ''' ------------------------ '''
-    def __init__(self, path_data, save_address=None, fps=60, grid_refinement=None, pclass_flag=False):
+    def __init__(self, path_data, save_address=None, fps=20, grid_refinement=None, pclass_flag=False):
         ''' Function to initialize the Warpx superclass '''
         ## Delete and recreate folder to save figures
         if save_address is not None:
@@ -102,7 +102,8 @@ class warpx_namelist:
 
     def save_animation(self, fig, ani_name, func, fargs):
         ''' Save animation to file '''
-        ani = matani.FuncAnimation(fig, func, self.timesteps, interval=1000/self.fps, fargs=fargs)
+        fig.tight_layout()
+        ani = matani.FuncAnimation(fig, func, self.timesteps, interval=1000/self.fps, fargs=fargs, blit=False)
         FFwriter = matani.FFMpegWriter(fps=self.fps)
         ani.save(f"{self.save_address}{ani_name}.mp4", writer=FFwriter)
     
@@ -198,3 +199,24 @@ class warpx_namelist:
         ## Or save animation
         else:
             self.save_animation(fig, "edf_anim", update_multihistogram_slider, fargs=(ax, update_func, [p.label for p in pop], bins, gamma_name+gamma_unit, 'Number of particles', xlim, self.timesteps, self.time, norm))
+            
+    def plasma_frequencies_evolution(self, electrons, ions):
+        ''' Plot the evolution over time of the volume-averaged characteristic plasma frequency '''
+        ## Precompute common frequencies to avoid redundant calculations
+        Omega_e = np.asarray([gyrofrequency(electrons, ts) for ts in range(len(self.time))])
+        Omega_i = np.asarray([gyrofrequency(ions, ts) for ts in range(len(self.time))])
+        omega_p = np.asarray([plasma_frequency(electrons, ts) for ts in range(len(self.time))])
+        ## Create plot
+        fig, ax = plt.subplots(figsize=(10, 8))
+        ax.plot(self.time, omega_p, label=r"$\omega_{pe}$")
+        ax.plot(self.time, [plasma_frequency(ions, ts) for ts in range(len(self.time))], label=r"$\omega_{pi}$")
+        print("omega_pi done")
+        ax.plot(self.time, Omega_e, label=r"$\Omega_{e}$")
+        ax.plot(self.time, Omega_i, label=r"$\Omega_{i}$")
+        ax.plot(self.time, omega_lefthand(electrons, 0, Omega_e=Omega_e, omega_p=omega_p), label=r"$\omega_{L}$")
+        ax.plot(self.time, omega_righthand(electrons, 0, Omega_e=Omega_e, omega_p=omega_p), label=r"$\omega_{R}$")
+        ax.plot(self.time, omega_upper_hybrid(electrons, 0, Omega_e=Omega_e, omega_p=omega_p), label=r"$\omega_{UH}$")
+        ax.plot(self.time, omega_lower_hybrid(electrons, ions, 0, Omega_e=Omega_e, omega_p=omega_p, Omega_i=Omega_i), label=r"$\omega_{LH}$")
+        ax.set(xlabel="t [s]", ylabel=r"$\omega$ [rad/s]")
+        ax.grid()
+        ax.legend()

@@ -2,9 +2,12 @@
 ######################### LIBRARIES ########################
 ############################################################
 
+import matplotlib
 import numpy as np
 import scipy.special as scisp
 import re
+import matplotlib.animation as matani
+import matplotlib.pyplot as plt
 
 ############################################################
 ########################### CLASS ##########################
@@ -271,6 +274,7 @@ class extfields:
         ''' Compute field maps cartesian components at given coordinates '''
         ## Evaluate indexes and cylindrical components
         r = (x**2 + y**2)**0.5
+        r[np.where(r==0)] = 1e-10 # Avoid division by zero
         B_static_r, B_pulsed_r, E_induced_r, B_static_z, B_pulsed_z = self.evaluate_maps_cylindrical_components(r, z, evaluate_indexes=evaluate_indexes)
         ## Return Cartesian components
         return B_static_r*x/r, B_pulsed_r*x/r, -E_induced_r*y/r, B_static_r*y/r, B_pulsed_r*y/r, E_induced_r*x/r, B_static_z, B_pulsed_z
@@ -320,3 +324,49 @@ class extfields:
         Ex = Ex_p*Ex_p_tb(t) + Ex_pw
         Ey = Ey_p*Ey_p_tb(t) + Ey_pw
         return (Ex, Ey, np.zeros_like(Ex))
+    
+    def field_evolution2D(self, func, z, r, t, zlab, zlim=(None, None), fps=20, save_address=None):
+        ''' Create animation of field evolution in a 2D longitudinal slice at given coordinates and time '''
+        ## Function to update time
+        def update_field2D(i):
+            ## Recover field
+            F_vec = getattr(self, func)(R, np.zeros_like(R), Z, t[i], evaluate_indexes=True)
+            F = np.sqrt(F_vec[0]**2 + F_vec[1]**2 + F_vec[2]**2)
+            ## Plot field
+            ax.clear()
+            ax.set_xlabel("z [m]", labelpad=15)
+            ax.set_ylabel("r [m]", labelpad=15)
+            ax.set_zlabel(zlab)
+            ax.plot_surface(Z, R, F, cmap='inferno')
+            ax.set_zlim(zlim[0], zlim[1])
+        ## Recover field
+        Z, R = np.meshgrid(z, r)
+        fig = plt.figure()
+        ax = fig.add_subplot(projection='3d')
+        ax.view_init(elev=10, azim=-80)
+        update_field2D(0)
+        ani = matani.FuncAnimation(fig, update_field2D, len(t), interval=1000/fps)
+        if save_address is not None:
+            FFwriter = matani.FFMpegWriter(fps=fps)
+            ani.save(f"{save_address}field_evo2D.gif", writer=FFwriter)
+            
+    def field_evolution1D(self, func, z, t, ylab, ylim=(None, None), fps=20, save_address=None):
+        ''' Create animation of field evolution along cavity axis at given coordinates and time '''
+        ## Function to update time
+        def update_field1D(i):
+            ## Recover field
+            F_vec = getattr(self, func)(np.zeros_like(z), np.zeros_like(z), z, t[i], evaluate_indexes=True)
+            F = np.sqrt(F_vec[0]**2 + F_vec[1]**2 + F_vec[2]**2)
+            ## Plot field
+            ax.clear()
+            ax.plot(z, F)
+            ax.set(xlabel="z [m]", ylabel=ylab)
+            ax.set_ylim(ylim[0], ylim[1])
+        ## Recover field
+        fig, ax = plt.subplots(1, figsize=(10, 8))
+        update_field1D(0)
+        plt.tight_layout()
+        ani = matani.FuncAnimation(fig, update_field1D, len(t), interval=1000/fps)
+        if save_address is not None:
+            FFwriter = matani.FFMpegWriter(fps=fps)
+            ani.save(f"{save_address}field_evo1D.mp4", writer=FFwriter)

@@ -26,9 +26,9 @@ import extfield_class as efc
 sys_path = "/home/cernuschi/pole_acc_storage/"
 #sys_path = "//lpscdata12.in2p3.fr/data11-pole/CERNUSCHI/"
 ## Define single path
-address_folder = "/home/cernuschi/coding/warpx/ecripac2/diags/"
+address_folder = "/home/cernuschi/coding/warpx/diags_rz/"
 #address_folder = "/home/cernuschi/coding/warpx/ecripac/ecripac_rz/diags/"
-#address_folder = sys_path + "PhD/Simulation results/WarpX/TE111_200kHz/test7_tr1/diags/"
+#address_folder = sys_path + "PhD/Simulation results/WarpX/TE111_200kHz/test8_tr5/diags/"
 particle_path = f"{address_folder}particle_diag/"
 field_path = f"{address_folder}field_diag/"
 #path_save = "/home/cernuschi/coding/warpx/ecripac/diagnostics/"
@@ -60,9 +60,9 @@ def Bfield(t):
 
 #'''
 ## Field maps -- Static 1.6 and pulsed 6.6 for 3D simulations, Static 1.1 and pulsed 4.4 for cylindrical simulations, Static 1.8 and pulsed 6.7 for pleiade 3D
-Bstatic_path = sys_path + "PhD/Simulation results/Field maps/ECRIPAC/Static (Poisson)/Conf1.1/ECRIPAC_solenoid_initial.txt"
-Bpulsed_path = sys_path + "PhD/Simulation results/Field maps/ECRIPAC/Pulsed (COMSOL)/Conf1_f200kHz/Test4.4/ECRIPAC_solenoid_pulsed.txt"
-Einduced_path = sys_path + "PhD/Simulation results/Field maps/ECRIPAC/Pulsed (COMSOL)/Conf1_f200kHz/Test4.4/ECRIPAC_induced_field.txt"
+Bstatic_path = sys_path + "PhD/Simulation results/Field maps/ECRIPAC/Static (Poisson)/Conf1.6/ECRIPAC_solenoid_initial.txt"
+Bpulsed_path = sys_path + "PhD/Simulation results/Field maps/ECRIPAC/Pulsed (COMSOL)/Conf1_f200kHz/Test6.6/ECRIPAC_solenoid_pulsed.txt"
+Einduced_path = sys_path + "PhD/Simulation results/Field maps/ECRIPAC/Pulsed (COMSOL)/Conf1_f200kHz/Test6.6/ECRIPAC_induced_field.txt"
 f_pul = 2e5 # Frequency of the pulsed field [Hz]
 
 ## TE fields
@@ -77,7 +77,7 @@ TE111 = efc.TEfields(1, 1, 1, L_cavity, R_cavity, z0_sim, E_PW, sciconst.c, fHF,
 #TE111 = efc.PWfields(0., E_PW, sciconst.c, fHF, T_ga, T_trans)
 
 ## External fields class
-#extfield = efc.extfields(Bstatic_path, Bpulsed_path, Einduced_path, f_pul, TE111)
+extfield = efc.extfields(Bstatic_path, Bpulsed_path, Einduced_path, f_pul, TE111)
 #'''
 ############################################################
 ########################### Main ###########################
@@ -87,17 +87,17 @@ TE111 = efc.TEfields(1, 1, 1, L_cavity, R_cavity, z0_sim, E_PW, sciconst.c, fHF,
 ''' Open diagnostics '''
 ''' ---------------- '''
 ## Fields
-#fields = fc.field_diagnostic.from_path(field_path, t_disp=t_disp, save_address=path_save)#, extfield=extfield, save_address=path_save)
+#fields = fc.field_diagnostic.from_path(field_path, t_disp=t_disp, extfield=extfield)#, extfield=extfield, save_address=path_save)
 
 ## Electrons
-electrons = pc.track_particles(field_path, particle_path, "electrons", dmult=dmult, grid_refinement=grid_refinement)#, save_address=path_save, extfield=extfield
+electrons = pc.track_particles(field_path, particle_path, "electrons", dmult=dmult, grid_refinement=grid_refinement, extfield=extfield)#, save_address=path_save, extfield=extfield
 #electrons = pc.track_lost_particles(field_path, particle_path, "electrons", grid_refinement=grid_refinement)
 #electrons = pc.track_filtered(field_path, particle_path, "electrons", "gamma", ll=2.75, grid_refinement=grid_refinement)
 #electrons_t2 = pc.track_filtered(field_path, particle_path, "electrons", "gamma", ll=13, ul=14.7, save_address=path_save, grid_refinement=grid_refinement)
 #electrons_t3 = pc.track_filtered(field_path, particle_path, "electrons", "gamma", ll=14.7, save_address=path_save, grid_refinement=grid_refinement)
 
 ## Ions
-#ions = pc.track_particles(field_path, particle_path, "alphas", dmult=dmult, grid_refinement=grid_refinement)#, save_address=path_save
+#ions = pc.track_particles(field_path, particle_path, "alphas", dmult=dmult, grid_refinement=grid_refinement, extfield=extfield)#, save_address=path_save
 #ions = pc.track_lost_particles(field_path, particle_path, "alphas", grid_refinement=grid_refinement, ts=-11, save_address=path_save)
 
 ## Multiple species
@@ -173,6 +173,11 @@ electrons = pc.track_particles(field_path, particle_path, "electrons", dmult=dmu
 #fields.fourier_plot("E", comp="z", logscale=False, electrons=electrons, ions=ions)
 #fields.polar_fourier_plot("E", comp="r", logscale=False, electrons=electrons, ions=ions)
 #fields.polar_fourier_plot("E", comp="theta", logscale=False, electrons=electrons, ions=ions)
+#electrons.plasma_frequencies_evolution(electrons, ions)
+
+## External fields
+#extfield.field_evolution2D("evaluate_Bfield", np.linspace(-0.2, 0.2, 100), np.linspace(0., 0.05, 100), electrons.time, "B [T]", save_address=path_save)
+#extfield.field_evolution1D("evaluate_Bfield", np.linspace(-0.2, 0.2, 100), electrons.time, "B [T]", save_address=path_save, ylim=(0, 5))
 
 
 ''' --------------------------- '''
@@ -180,7 +185,7 @@ electrons = pc.track_particles(field_path, particle_path, "electrons", dmult=dmu
 ''' --------------------------- '''
 ## Position and density plots
 ## Electrons diagnostics
-#electrons.particle_position(q_color=electrons.gamma, clabel="gamma")
+#electrons.particle_position(q_color=electrons.gamma, clabel=r"$\gamma$", vmax=17.4)
 #electrons.particle_position(q_color=electrons.w, clabel="weight")
 #electrons.position_distribution_slider(w=electrons.w)
 #electrons.lost_histogram(flag_notintegral=True)
@@ -198,21 +203,20 @@ electrons = pc.track_particles(field_path, particle_path, "electrons", dmult=dmu
 ## Multiple species diagnostics
 #electrons.c = "red"
 #ions.c = "blue"
-#electrons_t3.c = "green"
 #electrons.population_position([electrons, ions], alpha=0.3)
 
 ## Density plots
 ## Electrons diagnostics
 #electrons.densityplot1D_slider("evaluate_density", "n [m^3]")
-#electrons.densityplot2D_slider("evaluate_density", "n [m^3]")
+electrons.densityplot2D_slider("evaluate_density", r"n [m$^3$]")
 #electrons.densityplot2D_slider("evaluate_temperature", "T [keV]")
 #electrons.densityplot2D_slider("evaluate_debyelength", r"$\lambda_D$ [m]")
-electrons.densityplot2D_slider("evaluate_plasmapar", r"N$_D^3$")
+#electrons.densityplot2D_slider("evaluate_plasmapar", r"N$_D^3$")
 #electrons.densityplot2D_slider("evaluate_plasmafreq", r"$\omega_{p}$ [rad/s]")
 #electrons.densityplot2D_slider("evaluate_beta", r"$\beta$")
 ## Ions diagnostics
 #ions.densityplot1D_slider("evaluate_density", "n [m^3]")
-#ions.densityplot2D_slider("evaluate_density", "n [m^3]")
+#ions.densityplot2D_slider("evaluate_density", r"n [m$^3$]", vmin=0, vmax=1.4e16)
 #ions.densityplot2D_slider("evaluate_temperature", "T [keV]")
 #ions.densityplot2D_slider("evaluate_beta", r"$\beta$")
 #ions.densityplot2D_slider("evaluate_plasmafreq", r"$\omega_{p}$ [rad/s]")
@@ -225,14 +229,14 @@ electrons.densityplot2D_slider("evaluate_plasmapar", r"N$_D^3$")
 ## Energy plots
 ## Electrons diagnostics
 #electrons.momentum_distribution_slider()
-#electrons.edf_slider()
+electrons.edf_slider(flag_keV=True)
 #electrons.gamma_B_plot(B=Bfield)
 #electrons.emittance_slider()
 ## Trapped electrons diagnostics
 #electrons_t.edf_slider()
 ## Ions diagnostics
 #ions.momentum_distribution_slider()
-#ions.edf_slider(flag_keV=True, bins=1000)
+#ions.edf_slider(flag_keV=True, xlim=[0, 25], ylim=[0, 3500])
 #ions.gamma_B_plot(flag_keV=True)
 #ions.emittance_slider()
 ## Multiple species diagnostics
@@ -281,6 +285,4 @@ electrons.densityplot2D_slider("evaluate_plasmapar", r"N$_D^3$")
 #plt.plot(ions.time, pz_i, label="Ions")
 #plt.grid()
 
-
-
-plt.show()
+#plt.show()

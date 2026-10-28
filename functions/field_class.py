@@ -11,7 +11,7 @@ class field_diagnostic(warpx_namelist):
     ''' Initialization functions '''
     ''' ------------------------ '''
     @classmethod
-    def from_path(cls, path_data, extfield=False, save_address=None, t_disp=0):
+    def from_path(cls, path_data, extfield=False, save_address=None, t_disp=0, ts_min=None, ts_max=None):
         """ Factory method selecting the correct field diagnostic subclass """
         ## Construct OpenPMD object once
         warpx = OpenPMDTimeSeries(path_data)
@@ -27,17 +27,17 @@ class field_diagnostic(warpx_namelist):
         else:
             raise ValueError(f"Unknown geometry '{geometry}'")
         # Instantiate selected subclass
-        return field_class(warpx, extfield=extfield, save_address=save_address, t_disp=t_disp)
+        return field_class(warpx, extfield=extfield, save_address=save_address, t_disp=t_disp, ts_min=ts_min, ts_max=ts_max)
     
-    def __init__(self, warpx, extfield=False, save_address=None, t_disp=0):
+    def __init__(self, warpx, extfield=False, save_address=None, t_disp=0, ts_min=None, ts_max=None):
         """ Common initialization for all field diagnostics """
         ## Initialize superclass
         super().__init__(warpx, save_address)
         if save_address is not None:
             self.save_address = save_address
         ## Extract attributes from WarpX data
-        self.timesteps = warpx.iterations # List of timesteps available
-        self.time = warpx.t+t_disp # List of time values corresponding to timesteps
+        self.timesteps = warpx.iterations[ts_min:ts_max] # List of timesteps available
+        self.time = warpx.t[ts_min:ts_max]+t_disp # List of time values corresponding to timesteps
         self.dt = self.time[1] / self.timesteps[1] # Timestep size
         self.T = warpx.tmax+t_disp # Maximum time
         ## Get class attributes
@@ -332,6 +332,7 @@ class cartesian_field(field_diagnostic):
             update_2Ddensityplot(np.transpose(self.fgrid[:, self.y_gridind, :]), xz_den, xz_cbar, vmin=vmin, vmax=vmax)
             update_2Ddensityplot(np.transpose(self.fgrid[:, :, self.x_gridind]), yz_den, yz_cbar, vmin=vmin, vmax=vmax)
             plt.suptitle(f"t = {self.time[ind]:.2e} s")
+            format_cbars([xy_cbar, xz_cbar, yz_cbar])
             plt.draw()
             print(f"{field}{comp} at t = {self.time[ind]:.2e} s: min = {np.amin(self.fgrid):.2e}, max = {np.amax(self.fgrid):.2e}")
         ## Create initial density plots
@@ -339,21 +340,24 @@ class cartesian_field(field_diagnostic):
         vmax = np.amax(getattr(self, field+comp)) if vmax is True else vmax
         self.fgrid, unit = getattr(self, field+comp)[0], getattr(self, f"{field}_unit")
         self.x_gridind, self.y_gridind, self.z_gridind = self.ncell_x//2, self.ncell_y//2, self.ncell_z//2
+        cbar_label = field+comp+unit
         fig, ax = plt.subplots(1, 3, figsize=(18, 5))
-        xy_den, xy_cbar = imshowplot(np.flipud(self.fgrid[self.z_gridind, :, :]), [self.xmin, self.xmax, self.ymin, self.ymax], field+comp+unit, "x [m]", "y [m]", ax=ax[0], lmin=vmin, lmax=vmax)
-        xz_den, xz_cbar = imshowplot(np.flipud(np.transpose(self.fgrid[:, self.y_gridind, :])), [self.zmin, self.zmax, self.xmin, self.xmax], field+comp+unit, "z [m]", "x [m]", ax=ax[1], lmin=vmin, lmax=vmax)
-        yz_den, yz_cbar = imshowplot(np.flipud(np.transpose(self.fgrid[:, :, self.x_gridind])), [self.zmin, self.zmax, self.ymin, self.ymax], field+comp+unit, "z [m]", "y [m]", ax=ax[2], lmin=vmin, lmax=vmax)
+        xy_den, xy_cbar = imshowplot(np.flipud(self.fgrid[self.z_gridind, :, :]), [self.xmin, self.xmax, self.ymin, self.ymax], cbar_label, "x [m]", "y [m]", ax=ax[0], lmin=vmin, lmax=vmax)
+        xz_den, xz_cbar = imshowplot(np.flipud(np.transpose(self.fgrid[:, self.y_gridind, :])), [self.zmin, self.zmax, self.xmin, self.xmax], cbar_label, "z [m]", "x [m]", ax=ax[1], lmin=vmin, lmax=vmax)
+        yz_den, yz_cbar = imshowplot(np.flipud(np.transpose(self.fgrid[:, :, self.x_gridind])), [self.zmin, self.zmax, self.ymin, self.ymax], cbar_label, "z [m]", "y [m]", ax=ax[2], lmin=vmin, lmax=vmax)
+        format_cbars([xy_cbar, xz_cbar, yz_cbar])
         plt.suptitle(f"t = {self.time[0]:.2e} s")
-        ## Add slider for spatial translation
-        plt.subplots_adjust(bottom=0.5)
-        slider_xy = create_slider('z [m]', self.zgrid[0], self.zgrid[-1], self.zgrid[self.ncell_z//2], self.zgrid, loc=[0.12, 0.32, 0.2, 0.03])
-        slider_xz = create_slider('y [m]', self.ygrid[0], self.ygrid[-1], self.ygrid[self.ncell_y//2], self.ygrid, loc=[0.40, 0.32, 0.2, 0.03])
-        slider_yz = create_slider('x [m]', self.xgrid[0], self.xgrid[-1], self.xgrid[self.ncell_x//2], self.xgrid, loc=[0.68, 0.32, 0.2, 0.03])
-        slider_xy.on_changed(lambda val: update_space(val, 'z_gridind', lambda ind: (ind, slice(None), slice(None)), xy_den, xy_cbar, self.zgrid))
-        slider_xz.on_changed(lambda val: update_space(val, 'y_gridind', lambda ind: (slice(None), ind, slice(None)), xz_den, xz_cbar, self.ygrid))
-        slider_yz.on_changed(lambda val: update_space(val, 'x_gridind', lambda ind: (slice(None), slice(None), ind), yz_den, yz_cbar, self.xgrid))
         ## Either add slider
         if self.save_address is None:
+            plt.subplots_adjust(bottom=0.5)
+            ## Add slider for spatial translation
+            slider_xy = create_slider('z [m]', self.zgrid[0], self.zgrid[-1], self.zgrid[self.ncell_z//2], self.zgrid, loc=[0.12, 0.32, 0.2, 0.03])
+            slider_xz = create_slider('y [m]', self.ygrid[0], self.ygrid[-1], self.ygrid[self.ncell_y//2], self.ygrid, loc=[0.40, 0.32, 0.2, 0.03])
+            slider_yz = create_slider('x [m]', self.xgrid[0], self.xgrid[-1], self.xgrid[self.ncell_x//2], self.xgrid, loc=[0.68, 0.32, 0.2, 0.03])
+            slider_xy.on_changed(lambda val: update_space(val, 'z_gridind', lambda ind: (ind, slice(None), slice(None)), xy_den, xy_cbar, self.zgrid))
+            slider_xz.on_changed(lambda val: update_space(val, 'y_gridind', lambda ind: (slice(None), ind, slice(None)), xz_den, xz_cbar, self.ygrid))
+            slider_yz.on_changed(lambda val: update_space(val, 'x_gridind', lambda ind: (slice(None), slice(None), ind), yz_den, yz_cbar, self.xgrid))
+            ## Add slider for time evolution
             slider = create_slider('Timestep', self.timesteps[0], self.timesteps[-1], self.timesteps[0], self.timesteps, loc=[0.25, 0.1, 0.45, 0.03])
             slider.on_changed(update_time)
             plt.show(block=True)
@@ -402,16 +406,17 @@ class cartesian_field(field_diagnostic):
         z_plot, = plot2D(self.zgrid, self.fgrid[:, self.y_gridind, self.x_gridind], "z [m]", field+comp+unit, ax=ax[2])
         ax[2].set_ylim(vmin, vmax)
         plt.suptitle(f"t = {self.time[0]:.2e} s")
-        ## Add slider for spatial translation
-        plt.subplots_adjust(bottom=0.5)
-        slider_z = create_slider('z [m]', self.zgrid[0], self.zgrid[-1], self.zgrid[self.ncell_z//2], self.zgrid, loc=[0.12, 0.32, 0.2, 0.03])
-        slider_y = create_slider('y [m]', self.ygrid[0], self.ygrid[-1], self.ygrid[self.ncell_y//2], self.ygrid, loc=[0.40, 0.32, 0.2, 0.03])
-        slider_x = create_slider('x [m]', self.xgrid[0], self.xgrid[-1], self.xgrid[self.ncell_x//2], self.xgrid, loc=[0.68, 0.32, 0.2, 0.03])
-        slider_z.on_changed(lambda val: update_space(val, 'z_gridind', self.zgrid))
-        slider_y.on_changed(lambda val: update_space(val, 'y_gridind', self.ygrid))
-        slider_x.on_changed(lambda val: update_space(val, 'x_gridind', self.xgrid))
         ## Either add slider
         if self.save_address is None:
+            plt.subplots_adjust(bottom=0.5)
+            ## Add slider for spatial translation
+            slider_z = create_slider('z [m]', self.zgrid[0], self.zgrid[-1], self.zgrid[self.ncell_z//2], self.zgrid, loc=[0.12, 0.32, 0.2, 0.03])
+            slider_y = create_slider('y [m]', self.ygrid[0], self.ygrid[-1], self.ygrid[self.ncell_y//2], self.ygrid, loc=[0.40, 0.32, 0.2, 0.03])
+            slider_x = create_slider('x [m]', self.xgrid[0], self.xgrid[-1], self.xgrid[self.ncell_x//2], self.xgrid, loc=[0.68, 0.32, 0.2, 0.03])
+            slider_z.on_changed(lambda val: update_space(val, 'z_gridind', self.zgrid))
+            slider_y.on_changed(lambda val: update_space(val, 'y_gridind', self.ygrid))
+            slider_x.on_changed(lambda val: update_space(val, 'x_gridind', self.xgrid))
+            ## Add slider for time evolution
             slider = create_slider('Timestep', self.timesteps[0], self.timesteps[-1], self.timesteps[0], self.timesteps, loc=[0.25, 0.1, 0.45, 0.03])
             slider.on_changed(update_time)
             plt.show(block=True)
@@ -501,8 +506,8 @@ class cartesian_field(field_diagnostic):
         def update_plots():
             clear_field_axes(ax)
             ## Evaluate Fourier transform
-            self.kr, self.omega_r, self.Pr = self.polar_fourier_transform(field, comp, "r", self.z_gridind, self.ts_fp+1, r0=r0, theta0=theta0, rmax=rmax, nr=nr, x0=x0, y0=y0, logscale=logscale)
-            self.m, self.omega_t, self.Pt = self.polar_fourier_transform(field, comp, "theta", self.z_gridind, self.ts_fp+1, r0=r0, theta0=theta0, ntheta=ntheta,x0=x0, y0=y0, logscale=logscale)
+            self.kr, self.omega_r, self.Pr = self.polar_fourier_transform(field, comp, "r", self.z_gridind, self.ts_fp+1, r0=self.r0, theta0=self.theta0, rmax=rmax, nr=nr, x0=x0, y0=y0, logscale=logscale)
+            self.m, self.omega_t, self.Pt = self.polar_fourier_transform(field, comp, "theta", self.z_gridind, self.ts_fp+1, r0=self.r0, theta0=self.theta0, ntheta=ntheta,x0=x0, y0=y0, logscale=logscale)
             ## Create plots
             pcolormesh_plot(self.kr, self.omega_r, self.Pr, cbar_label, r'k$_r$ [m$^{-1}$]', r'$\omega$ [rad/s]', ax=ax[0], lmin=vmin, lmax=vmax)
             pcolormesh_plot(self.m, self.omega_t, self.Pt, cbar_label, r'azimuthal mode $m$', r'$\omega$ [rad/s]', ax=ax[1], lmin=vmin, lmax=vmax)
@@ -585,7 +590,10 @@ class cylindrical_field(field_diagnostic):
             self.fgrid = getattr(self, field+comp)[ind]
             update_2Ddensityplot(np.transpose(self.fgrid), den, cbar, vmin=vmin, vmax=vmax)
             plt.suptitle(f"t = {self.time[ind]:.2e} s")
+            cbar.formatter = make_sci_formatter()
+            cbar.update_ticks()
             plt.draw()
+            print(matplotlib.__version__, type(cbar), type(cbar.formatter))
             print(f"{field}{comp} at t = {self.time[ind]:.2e} s: min = {np.amin(self.fgrid):.2e}, max = {np.amax(self.fgrid):.2e}")
         ## Create initial density plots
         vmin = np.amin(getattr(self, field+comp)) if vmin is True else vmin
@@ -593,11 +601,13 @@ class cylindrical_field(field_diagnostic):
         self.fgrid, unit = getattr(self, field+comp)[0], getattr(self, f"{field}_unit")
         fig, ax = plt.subplots()
         den, cbar = imshowplot(np.flipud(np.transpose(self.fgrid)), [self.zmin, self.zmax, self.rmin, self.rmax], field+comp+unit, "z [m]", "r [m]", ax=ax, lmin=vmin, lmax=vmax)
+        cbar.formatter = make_sci_formatter()
+        cbar.update_ticks()
         plt.suptitle(f"t = {self.time[0]:.2e} s")
-        ## Add slider for spatial translation
-        plt.subplots_adjust(bottom=0.25)
         ## Either add slider
         if self.save_address is None:
+            plt.subplots_adjust(bottom=0.25)
+            ## Add slider for time evolution
             slider = create_slider('Timestep', self.timesteps[0], self.timesteps[-1], self.timesteps[0], self.timesteps, loc=[0.25, 0.1, 0.45, 0.03])
             slider.on_changed(update_time)
             plt.show(block=True)
@@ -643,14 +653,15 @@ class cylindrical_field(field_diagnostic):
         z_plot, = plot2D(self.zgrid, self.fgrid[:, self.r_gridind], "z [m]", field+comp+unit, ax=ax[1])
         ax[1].set_ylim(vmin, vmax)
         plt.suptitle(f"t = {self.time[0]:.2e} s")
-        ## Add slider for spatial translation
-        plt.subplots_adjust(bottom=0.5)
-        slider_z = create_slider('z [m]', self.zgrid[0], self.zgrid[-1], self.zgrid[self.ncell_z//2], self.zgrid, loc=[0.2, 0.32, 0.2, 0.03])
-        slider_r = create_slider('r [m]', self.rgrid[0], self.rgrid[-1], self.rgrid[self.ncell_r//2], self.rgrid, loc=[0.60, 0.32, 0.2, 0.03])
-        slider_z.on_changed(lambda val: update_space(val, 'z_gridind', self.zgrid))
-        slider_r.on_changed(lambda val: update_space(val, 'r_gridind', self.rgrid))
         ## Either add slider
         if self.save_address is None:
+            plt.subplots_adjust(bottom=0.5)
+            ## Add slider for spatial translation
+            slider_z = create_slider('z [m]', self.zgrid[0], self.zgrid[-1], self.zgrid[self.ncell_z//2], self.zgrid, loc=[0.2, 0.32, 0.2, 0.03])
+            slider_r = create_slider('r [m]', self.rgrid[0], self.rgrid[-1], self.rgrid[self.ncell_r//2], self.rgrid, loc=[0.60, 0.32, 0.2, 0.03])
+            slider_z.on_changed(lambda val: update_space(val, 'z_gridind', self.zgrid))
+            slider_r.on_changed(lambda val: update_space(val, 'r_gridind', self.rgrid))
+            ## Add slider for time evolution
             slider = create_slider('Timestep', self.timesteps[0], self.timesteps[-1], self.timesteps[0], self.timesteps, loc=[0.25, 0.1, 0.45, 0.03])
             slider.on_changed(update_time)
             plt.show(block=True)

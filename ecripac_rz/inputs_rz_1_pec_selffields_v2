@@ -1,0 +1,146 @@
+# =============================================================================
+# FIX A - SINGLE RUN: Poisson-consistent initial fields, PEC walls (real cavity)
+#
+# <species>.initialize_self_fields = 1: at t = 0 WarpX deposits rho for each
+# species, solves Poisson's equation (multigrid, pec walls -> phi = 0) and adds
+# the resulting E to the grid, so div(E) = rho/eps0 holds from the first step.
+#
+# v2 changes (marked "# v2"):
+#   * t_restart / t_end constants: the restart time is written ONCE and used by
+#     the applied-field time dependence and by stop_time.
+#     >>> CHECK t_restart = physical time of chkpoints/*.h5 in the 3D run. <<<
+#   * stop_time = t_end - t_restart replaces the 118 ns covered by 300000 steps
+#     (dt = 3.945e-13 s; 656.6 -> 1250 ns is ~1.50e6 steps).
+#   * gauss_diag written to its own folder (no mixing with the Test 0 files).
+#   * field- and particle-energy monitors (diags/reducedfiles/fe.txt, pe.txt).
+#
+# Continuing after a wall-time limit: add
+#   amr.restart = "./chkpoints/Python_restart_runtime_components_chkNNNNNN"
+# and resubmit the same file. On a restart the self-field solve is skipped
+# (fields come from the checkpoint) and stop_time still refers to t = 0 of
+# this run, so nothing else changes.
+# =============================================================================
+
+my_constants.t_restart = 6.5658610116e-07                     # v2 >>> CHECK <<< restart time [s]
+my_constants.t_end = 1.25e-06                                 # v2 end of the working cycle [s]
+stop_time = t_end - t_restart                                 # v2
+
+max_step = 100000                                            # v2 safety cap; stop_time decides
+
+# algo
+algo.load_balance_intervals = 10
+algo.maxwell_solver = "Yee"
+algo.particle_shape = 2
+algo.current_deposition = esirkepov                           # NEW (explicit; default for Yee)
+
+# alphas
+alphas.initialize_self_fields = 1                             # CHANGED (was 0)
+alphas.injection_file = "chkpoints/alphas.h5"
+alphas.injection_style = "external_file"
+alphas.self_fields_verbosity = 2                              # NEW (prints MLMG convergence)
+alphas.self_fields_max_iters = 400                            # NEW (default 200)
+
+# amr
+amr.blocking_factor = 32
+amr.max_grid_size = 64
+amr.max_level = 0
+amr.n_cell = 288 9376
+
+# boundary
+boundary.field_hi = pec pec                                   # CHANGED (was absorbing_silver_mueller x2)
+boundary.field_lo = none pec                                  # CHANGED (was none absorbing_silver_mueller)
+boundary.particle_hi = absorbing absorbing
+boundary.particle_lo = none absorbing
+
+# chkpoint
+chkpoint.diag_type = "Full"
+chkpoint.file_prefix = "./chkpoints/Python_restart_runtime_components_chk"
+chkpoint.format = "checkpoint"
+chkpoint.intervals = 50000
+
+# diagnostics
+diagnostics.diags_names = particle_diag smallparticle_diag field_diag chkpoint gauss_diag   # CHANGED (+gauss_diag)
+
+# electrons
+electrons.initialize_self_fields = 1                          # CHANGED (was 0)
+electrons.injection_file = "chkpoints/electrons.h5"
+electrons.injection_style = "external_file"
+electrons.self_fields_verbosity = 2                           # NEW
+electrons.self_fields_max_iters = 400                         # NEW
+
+# field_diag
+field_diag.coarsening_ratio = 4 4
+field_diag.diag_type = "Full"
+field_diag.dump_last_timestep = 1
+field_diag.fields_to_plot = Br Bt Bz Er Et Ez jr jt jz rho
+field_diag.format = "openpmd"
+field_diag.intervals = 5000
+field_diag.openpmd_backend = "h5"
+field_diag.write_species = 0
+
+# gauss_diag: Gauss's-law monitor, full resolution, |z| < 5 cm
+gauss_diag.diag_type = "Full"                                 # NEW
+gauss_diag.format = "openpmd"                                 # NEW
+gauss_diag.openpmd_backend = "h5"                             # NEW
+gauss_diag.intervals = 0:0, 2500:2500, 40000::40000          # NEW (steps 0 and 2500, then every 40000)
+gauss_diag.fields_to_plot = Er Ez divE rho                    # NEW
+gauss_diag.diag_lo = 0.0 -0.05                                # NEW
+gauss_diag.diag_hi = 0.05 0.05                                # NEW
+gauss_diag.write_species = 0                                  # NEW
+
+# geometry
+geometry.dims = "RZ"
+geometry.prob_hi = 0.05 1.8
+geometry.prob_lo = 0.0 -0.1
+
+# reduced diagnostics: one line per 100 steps in diags/reducedfiles/   # v2
+warpx.reduced_diags_names = fe pe                             # v2
+fe.type = FieldEnergy                                         # v2 (E and B field energy)
+fe.intervals = 100                                            # v2
+pe.type = ParticleEnergy                                      # v2 (kinetic energy per species)
+pe.intervals = 100                                            # v2
+
+# particle_diag
+particle_diag.alphas.variables = theta ux uy uz w x z
+particle_diag.diag_type = "Full"
+particle_diag.dump_last_timestep = 1
+particle_diag.electrons.variables = theta ux uy uz w x z
+particle_diag.fields_to_plot = "none"
+particle_diag.format = "openpmd"
+particle_diag.intervals = 50000
+particle_diag.openpmd_backend = "h5"
+particle_diag.species = electrons alphas
+particle_diag.write_species = 1
+
+# particles (applied fields: unchanged)
+particles.B_ext_particle_fields = ext_field1 ext_field2
+particles.B_ext_particle_init_style = "read_from_file"
+particles.E_ext_particle_fields = ext_field3
+particles.E_ext_particle_init_style = "read_from_file"
+particles.ext_field1.read_fields_B_dependency(t) = "1.0"
+particles.ext_field1.read_fields_from_path = "../res/ECRIPAC_staticfields_thetaMode.h5"
+particles.ext_field2.read_fields_B_dependency(t) = "sin(1256637.0614359172*(t+t_restart) + 1.5707963267948966)"
+particles.ext_field2.read_fields_from_path = "../res/ECRIPAC_pulsedfields_thetaMode.h5"
+particles.ext_field3.read_fields_E_dependency(t) = "cos(1256637.0614359172*(t+t_restart) + 1.5707963267948966)"
+particles.ext_field3.read_fields_from_path = "../res/ECRIPAC_pulsedfields_thetaMode.h5"
+particles.species_names = electrons alphas
+
+# smallparticle_diag
+smallparticle_diag.alphas.random_fraction = 0.01
+smallparticle_diag.alphas.variables = theta ux uy uz w x z
+smallparticle_diag.diag_type = "Full"
+smallparticle_diag.dump_last_timestep = 1
+smallparticle_diag.electrons.random_fraction = 0.01
+smallparticle_diag.electrons.variables = theta ux uy uz w x z
+smallparticle_diag.fields_to_plot = "none"
+smallparticle_diag.format = "openpmd"
+smallparticle_diag.intervals = 5000
+smallparticle_diag.openpmd_backend = "h5"
+smallparticle_diag.species = electrons alphas
+smallparticle_diag.write_species = 1
+
+# warpx
+warpx.cfl = 0.95
+warpx.n_rz_azimuthal_modes = 1                                # NEW (explicit; RZ Poisson solve requires 1 mode)
+warpx.verbose = 1
+warpx.limit_verbose_step = true

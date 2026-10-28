@@ -9,7 +9,7 @@ class track_particles(warpx_namelist):
     ''' ------------------------ '''
     ''' Initialization functions '''
     ''' ------------------------ '''
-    def __init__(self, path_field, path_data, species_name, dmult=1., flag_superclass=True, save_address=None, extfield=None, grid_refinement=None):
+    def __init__(self, path_field, path_data, species_name, dmult=1., flag_superclass=True, save_address=None, extfield=None, grid_refinement=None, ts_min=None, ts_max=None):
         ''' Function to initialize the track_particles superclass '''
         ## Initialize superclass
         super().__init__(path_field, save_address=save_address, grid_refinement=grid_refinement, pclass_flag=True)
@@ -18,8 +18,8 @@ class track_particles(warpx_namelist):
         ## Open diagnostics and extract raw data
         self.name = species_name
         warpx = OpenPMDTimeSeries(path_data)
-        self.timesteps = warpx.iterations # List of timesteps available
-        self.time = warpx.t # List of time values corresponding to timesteps
+        self.timesteps = warpx.iterations[ts_min:ts_max] # List of timesteps available
+        self.time = warpx.t[ts_min:ts_max] # List of time values corresponding to timesteps
         self.dt, self.T = self.time[1]/self.timesteps[1], warpx.tmax # Timestep size and maximum time
         self.mass = warpx.get_particle(var_list=['mass'], iteration=0, species=species_name)[0][0] # Particle mass [SI]
         self.charge = warpx.get_particle(var_list=['charge'], iteration=0, species=species_name)[0][0] # Particle charge [SI]
@@ -137,7 +137,7 @@ class track_particles(warpx_namelist):
     def return_units_gamma(self, flag_keV):
         ''' Return the units and rescale factor for either Lorentz factor or kinetic energy in keV '''
         if flag_keV is True:
-            return lambda x:  kin_en_from_gamma(x, self.K_ref_keV), " [keV]", "K"
+            return lambda x:  kin_en_from_gamma(x, self.K_ref_keV), " [keV]", "W"
         else:
             return lambda x: x, " [code units]", f"{gamma_unicode}"
     
@@ -180,7 +180,7 @@ class track_particles(warpx_namelist):
     ''' ----------------------------------------------------------- '''
     ''' Functions for analysis of position and density distribution '''
     ''' ----------------------------------------------------------- '''
-    def particle_position(self, q_color=None, clabel=None, n_part=10000):
+    def particle_position(self, q_color=None, clabel=None, n_part=10000, vmin=None, vmax=None):
         ''' Plot particle position distribution in 2D and 3D '''
         ## Evaluate indexes mask at t=0
         if len(self.x[0]) > n_part:
@@ -226,16 +226,19 @@ class track_particles(warpx_namelist):
                 ind_pu = slice(None)
             sc3D._offsets3d = (self.z[ind][ind_pu], self.x[ind][ind_pu], self.y[ind][ind_pu])
             sc3D.set_array(q_color[ind][ind_pu])
-            cbar3D.mappable.set_clim(vmin=np.amin(q_color[ind][ind_pu]), vmax=np.amax(q_color[ind][ind_pu]))
+            cbar3D.mappable.set_clim(vmin=vmin, vmax=vmax)
             plt.suptitle(f"t = {self.time[ind]:.2e} s")
         ## Setup 3D plot
-        ax3D = plt.figure().add_subplot(111, projection='3d')
+        fig3D = plt.figure()
+        ax3D = fig3D.add_subplot(111, projection='3d')
+        ax3D.view_init(elev=20, azim=20)
         ax3D.set_xlabel("z [m]", labelpad=10)
         ax3D.set_ylabel("x [m]", labelpad=10)
         ax3D.set_zlabel("y [m]", labelpad=10)
         ax3D.plot_surface(self.z_grid, self.x_grid, self.y_grid, alpha=0.2)
         sc3D = ax3D.scatter(self.z[0][ind_p], self.x[0][ind_p], self.y[0][ind_p], s=scatterdim, c=q_color[0][ind_p], cmap=colormap)
-        cbar3D = plt.colorbar(sc3D, label=clabel, pad=0.15, shrink=0.5)
+        cbar3D = plt.colorbar(sc3D, label=clabel, pad=0.05, shrink=0.5)
+        cbar3D.mappable.set_clim(vmin=vmin, vmax=vmax)
         plt.suptitle(f"t = {self.time[0]:.2e} s")
         ## Either add slider
         if self.save_address is None:
@@ -244,7 +247,7 @@ class track_particles(warpx_namelist):
             plt.show(block=True)
         ## Or save animation
         else:
-            self.save_animation(fig, "position_anim_3D", update3D, fargs=())
+            self.save_animation(fig3D, "position_anim_3D", update3D, fargs=())
 
     def position_distribution_slider(self, bins=100, unit_label=" [m]", w=None, rescale=1.):
         ''' Create a slider plot for position distribution in longitudinal and transversal planes '''
@@ -295,21 +298,21 @@ class track_particles(warpx_namelist):
         ## Create initial grid and 2D density plots
         fig, ax = plt.subplots(1, 3, figsize=(18, 5))
         self.dgrid = func(0)
-        self.x_gridind, self.y_gridind, self.z_gridind = self.ncell_x//2, self.ncell_y//2, self.ncell_z//2
+        self.x_gridind, self.y_gridind, self.z_gridind = self.ncell_x//2+1, self.ncell_y//2+1, self.ncell_z//2+1
         xy_den, xy_cbar = imshowplot(np.flipud(self.dgrid[:, :, self.z_gridind]), [self.xmin, self.xmax, self.ymin, self.ymax], label, "x [m]", "y [m]", ax=ax[0], lmin=vmin, lmax=vmax)
         xz_den, xz_cbar = imshowplot(np.flipud(self.dgrid[:, self.y_gridind, :]), [self.zmin, self.zmax, self.xmin, self.xmax], label, "z [m]", "x [m]", ax=ax[1], lmin=vmin, lmax=vmax)
         yz_den, yz_cbar = imshowplot(np.flipud(self.dgrid[self.x_gridind, :, :]), [self.zmin, self.zmax, self.ymin, self.ymax], label, "z [m]", "y [m]", ax=ax[2], lmin=vmin, lmax=vmax)
         plt.suptitle(f"t = {self.time[0]:.2e} s")
-        ## Add slider for spatial translation
-        plt.subplots_adjust(bottom=0.5)
-        slider_xy = create_slider('z [m]', self.zgrid[0], self.zgrid[-1], self.zgrid[self.ncell_z//2], self.zgrid, loc=[0.12, 0.32, 0.2, 0.03])
-        slider_xz = create_slider('y [m]', self.ygrid[0], self.ygrid[-1], self.ygrid[self.ncell_y//2], self.ygrid, loc=[0.40, 0.32, 0.2, 0.03])
-        slider_yz = create_slider('x [m]', self.xgrid[0], self.xgrid[-1], self.xgrid[self.ncell_x//2], self.xgrid, loc=[0.68, 0.32, 0.2, 0.03])
-        slider_xy.on_changed(lambda val: update_space(val, 'z_gridind', lambda ind: (slice(None), slice(None), ind), xy_den, xy_cbar, self.zgrid))
-        slider_xz.on_changed(lambda val: update_space(val, 'y_gridind', lambda ind: (slice(None), ind, slice(None)), xz_den, xz_cbar, self.ygrid))
-        slider_yz.on_changed(lambda val: update_space(val, 'x_gridind', lambda ind: (ind, slice(None), slice(None)), yz_den, yz_cbar, self.xgrid))
-        ## Either add slider
         if self.save_address is None:
+            plt.subplots_adjust(bottom=0.5)
+            ## Add slider for spatial translation
+            slider_xy = create_slider('z [m]', self.zgrid[0], self.zgrid[-1], self.zgrid[self.ncell_z//2], self.zgrid, loc=[0.12, 0.32, 0.2, 0.03])
+            slider_xz = create_slider('y [m]', self.ygrid[0], self.ygrid[-1], self.ygrid[self.ncell_y//2], self.ygrid, loc=[0.40, 0.32, 0.2, 0.03])
+            slider_yz = create_slider('x [m]', self.xgrid[0], self.xgrid[-1], self.xgrid[self.ncell_x//2], self.xgrid, loc=[0.68, 0.32, 0.2, 0.03])
+            slider_xy.on_changed(lambda val: update_space(val, 'z_gridind', lambda ind: (slice(None), slice(None), ind), xy_den, xy_cbar, self.zgrid))
+            slider_xz.on_changed(lambda val: update_space(val, 'y_gridind', lambda ind: (slice(None), ind, slice(None)), xz_den, xz_cbar, self.ygrid))
+            slider_yz.on_changed(lambda val: update_space(val, 'x_gridind', lambda ind: (ind, slice(None), slice(None)), yz_den, yz_cbar, self.xgrid))
+            ## Either add slider
             slider = create_slider('Timestep', self.timesteps[0], self.timesteps[-1], self.timesteps[0], self.timesteps, loc=[0.25, 0.1, 0.45, 0.03])
             slider.on_changed(update_time)
             plt.show(block=True)
@@ -355,16 +358,17 @@ class track_particles(warpx_namelist):
         y_plot, = plot2D(self.ygrid, self.dgrid[self.x_gridind, :, self.z_gridind], "y [m]", label, ax=ax[1])
         z_plot, = plot2D(self.zgrid, self.dgrid[self.x_gridind, self.y_gridind, :], "z [m]", label, ax=ax[2])
         plt.suptitle(f"t = {self.time[0]:.2e} s")
-        ## Add slider for spatial translation
-        plt.subplots_adjust(bottom=0.5)
-        slider_z = create_slider('z [m]', self.zgrid[0], self.zgrid[-1], self.zgrid[self.ncell_z//2], self.zgrid, loc=[0.12, 0.32, 0.2, 0.03])
-        slider_y = create_slider('y [m]', self.ygrid[0], self.ygrid[-1], self.ygrid[self.ncell_y//2], self.ygrid, loc=[0.40, 0.32, 0.2, 0.03])
-        slider_x = create_slider('x [m]', self.xgrid[0], self.xgrid[-1], self.xgrid[self.ncell_x//2], self.xgrid, loc=[0.68, 0.32, 0.2, 0.03])
-        slider_z.on_changed(lambda val: update_space(val, 'z_gridind', self.zgrid))
-        slider_y.on_changed(lambda val: update_space(val, 'y_gridind', self.ygrid))
-        slider_x.on_changed(lambda val: update_space(val, 'x_gridind', self.xgrid))
         ## Either add slider
         if self.save_address is None:
+            plt.subplots_adjust(bottom=0.5)
+            ## Add slider for spatial translation
+            slider_z = create_slider('z [m]', self.zgrid[0], self.zgrid[-1], self.zgrid[self.ncell_z//2], self.zgrid, loc=[0.12, 0.32, 0.2, 0.03])
+            slider_y = create_slider('y [m]', self.ygrid[0], self.ygrid[-1], self.ygrid[self.ncell_y//2], self.ygrid, loc=[0.40, 0.32, 0.2, 0.03])
+            slider_x = create_slider('x [m]', self.xgrid[0], self.xgrid[-1], self.xgrid[self.ncell_x//2], self.xgrid, loc=[0.68, 0.32, 0.2, 0.03])
+            slider_z.on_changed(lambda val: update_space(val, 'z_gridind', self.zgrid))
+            slider_y.on_changed(lambda val: update_space(val, 'y_gridind', self.ygrid))
+            slider_x.on_changed(lambda val: update_space(val, 'x_gridind', self.xgrid))
+            ## Add slider for time evolution
             slider = create_slider('Timestep', self.timesteps[0], self.timesteps[-1], self.timesteps[0], self.timesteps, loc=[0.25, 0.1, 0.45, 0.03])
             slider.on_changed(update_time)
             plt.show(block=True)
@@ -404,26 +408,26 @@ class track_particles(warpx_namelist):
         if self.save_address is not None:
             plt.savefig(self.save_address+"gamma_B_plot.png", bbox_inches='tight', dpi=dpi)
 
-    def edf_slider(self, bins=100, xlim=None, flag_keV=False):
+    def edf_slider(self, bins=100, xlim=None, ylim=None, flag_keV=False):
         ''' Create a slider plot for energy distribution functions '''
         ## Convert gamma to keV if needed
         rescale, gamma_unit, gamma_name = self.return_units_gamma(flag_keV)
         ## Set initial histogram
         def update_func(ind):
             return rescale(self.gamma[ind])
-        if xlim is not None and not isinstance(xlim, list):
+        if xlim is True:
             max_x, max_ind = tuple_maxvalue(self.gamma, rescale=rescale)
-            xlim = [0.95 if not flag_keV else 0., max_x]
+            xlim = [1. if not flag_keV else 0., max_x]
             print(f"Maximum {gamma_name}{gamma_unit} over all timesteps at timestep {self.timesteps[max_ind]}: {max_x:.2e}")
-        fig, ax = histplot(update_func(0), bins, gamma_name+gamma_unit, f'Number of {self.name}', xlim=xlim, suptitle=f"t = {self.time[0]:.2e} s")
+        fig, ax = histplot(update_func(0), bins, gamma_name+gamma_unit, f'dN/d{gamma_name}', xlim=xlim, ylim=ylim, suptitle=f"t = {self.time[0]:.2e} s")
         ## Either add slider
         if self.save_address is None:
             slider = create_slider('Timestep', self.timesteps[0], self.timesteps[-1], self.timesteps[0], self.timesteps, adjust_plot=True)
-            slider.on_changed(lambda val: update_histogram_slider(val, ax, update_func, bins, gamma_name+gamma_unit, f'Number of {self.name}', xlim, self.timesteps, self.time))
+            slider.on_changed(lambda val: update_histogram_slider(val, ax, update_func, bins, gamma_name+gamma_unit, f'dN/d{gamma_name}', xlim, ylim, self.timesteps, self.time))
             plt.show(block=True)
         ## Or save animation
         else:
-            self.save_animation(fig, "edf_anim", update_histogram_slider, fargs=(ax, update_func, bins, gamma_name+gamma_unit, f'Number of {self.name}', xlim, self.timesteps, self.time))
+            self.save_animation(fig, "edf_anim", update_histogram_slider, fargs=(ax, update_func, bins, gamma_name+gamma_unit, f'dN/d{gamma_name}', xlim, ylim, self.timesteps, self.time))
 
     def emittance_slider(self, bins=100, vmin=None, vmax=None, xrange=None, yrange=None, zrange=None, prange=None):
         ''' Create a slider density plot for several 2D plane of a given plasma quantity, based on a given function '''
@@ -459,7 +463,7 @@ class track_particles(warpx_namelist):
     ''' ------------------------------ '''
     ''' Functions for general analysis '''
     ''' ------------------------------ '''
-    def classattribute_slider(self, attr, xlab, bins=100, xlim=None):
+    def classattribute_slider(self, attr, xlab, bins=100, xlim=None, ylim=None):
         ''' Create a slider plot for any class attribute distribution ''' 
         ## Set initial histogram
         def update_func(ind):
@@ -468,11 +472,11 @@ class track_particles(warpx_namelist):
         ## Either add slider
         if self.save_address is None:
             slider = create_slider('Timestep', self.timesteps[0], self.timesteps[-1], self.timesteps[0], self.timesteps, adjust_plot=True)
-            slider.on_changed(lambda val: update_histogram_slider(val, ax, update_func, bins, xlab, f'Number of {self.name}', xlim, self.timesteps, self.time))
+            slider.on_changed(lambda val: update_histogram_slider(val, ax, update_func, bins, xlab, f'Number of {self.name}', xlim, ylim, self.timesteps, self.time))
             plt.show(block=True)
         ## Or save animation
         else:
-            self.save_animation(fig, f"{attr}_anim", update_histogram_slider, fargs=(ax, update_func, bins, xlab, f'Number of {self.name}', xlim, self.timesteps, self.time))
+            self.save_animation(fig, f"{attr}_anim", update_histogram_slider, fargs=(ax, update_func, bins, xlab, f'Number of {self.name}', xlim, ylim, self.timesteps, self.time))
         
     def evaluate_average(self, attr, ylab, xlim=None, ylim=None, mf=1):
         ''' Function to evaluate the average of a given attribute '''
@@ -493,10 +497,10 @@ class track_filtered(track_particles):
     ''' ------------------------ '''
     ''' Initialization functions '''
     ''' ------------------------ '''
-    def __init__(self, path_field, path_data, species_name, filter_quant, ll=-np.inf, ul=np.inf, ts=False, save_address=None, extfield=None, grid_refinement=None):
+    def __init__(self, path_field, path_data, species_name, filter_quant, ll=-np.inf, ul=np.inf, ts=False, save_address=None, extfield=None, grid_refinement=None, ts_min=0, ts_max=None):
         ''' Function to initialize the subclass '''
         ## Initialize superclass
-        super().__init__(path_field, path_data, species_name, save_address=save_address, flag_superclass=False, grid_refinement=grid_refinement)
+        super().__init__(path_field, path_data, species_name, save_address=save_address, flag_superclass=False, grid_refinement=grid_refinement, ts_min=ts_min, ts_max=ts_max)
         ## Create dictionary to map filter names to class attributes
         warpx = OpenPMDTimeSeries(path_data)
         x = self.get_warpx_attributes(warpx, "x")
@@ -546,10 +550,10 @@ class track_lost_particles(track_particles):
     ''' ------------------------ '''
     ''' Initialization functions '''
     ''' ------------------------ '''
-    def __init__(self, path_field, path_data, species_name, save_address=None, extfield=None, ts=-1, grid_refinement=None):
+    def __init__(self, path_field, path_data, species_name, save_address=None, extfield=None, ts=-1, grid_refinement=None, ts_min=0, ts_max=None):
         ''' Function to initialize the subclass '''
         ## Initialize superclass
-        super().__init__(path_field, path_data, species_name, save_address=save_address, flag_superclass=False, grid_refinement=grid_refinement)
+        super().__init__(path_field, path_data, species_name, save_address=save_address, flag_superclass=False, grid_refinement=grid_refinement, ts_min=ts_min, ts_max=ts_max)
         ## Create mask for id to track filtered particles at each timestep
         warpx = OpenPMDTimeSeries(path_data)
         id = self.get_warpx_attributes(warpx, "id")
